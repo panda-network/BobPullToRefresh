@@ -43,6 +43,7 @@ NSString *NSStringFromBPRPullToRefreshState(BPRPullToRefreshState state) {
     void (^_actionHandler)(BPRPullToRefresh *pullToRefresh);
     
     UIEdgeInsets _originalContentInsets;
+    CGFloat _originalTopOffset;
     FBKVOController *_observerController;
     
     BOOL triggeredActionHandler;
@@ -61,6 +62,8 @@ NSString *NSStringFromBPRPullToRefreshState(BPRPullToRefreshState state) {
                                                   originalContentInsets.left,
                                                   originalContentInsets.bottom,
                                                   originalContentInsets.right);
+
+        _originalTopOffset = -originalContentInsets.top;
         
         //Using facebook's KVO controller to simplify observing and cleaning up observers
         _observerController = [FBKVOController controllerWithObserver:self];
@@ -109,18 +112,18 @@ NSString *NSStringFromBPRPullToRefreshState(BPRPullToRefreshState state) {
         return;
     }
     
+    CGFloat scrollOffsetThreshold = _refreshView.thresholdHeight + _originalContentInsets.top;
     if (_state != BPRPullToRefreshStateLoading) {
-        CGFloat scrollOffsetThreshold = _refreshView.thresholdHeight + _originalContentInsets.top;
         
         if (!_scrollView.isDragging && _state == BPRPullToRefreshStateTriggered) {
             //released after having dragged beyond the threshold so loading begins.
             _state = BPRPullToRefreshStateLoading;
             
-            [self animateScrollViewContentInsets:UIEdgeInsetsMake(_refreshView.thresholdHeight,
+            [self animateScrollViewContentInsets:UIEdgeInsetsMake(scrollOffsetThreshold,
                                                                   _originalContentInsets.left,
                                                                   _originalContentInsets.bottom,
                                                                   _originalContentInsets.right)];
-            [_scrollView setContentOffset:CGPointMake(0, -_refreshView.thresholdHeight) animated:YES];
+            [_scrollView setContentOffset:CGPointMake(0, -scrollOffsetThreshold) animated:YES];
         } else if (ABS(position.y) >= scrollOffsetThreshold && _scrollView.isDragging && _state == BPRPullToRefreshStateIdle) {
             //passed the threshold well still dragging and haven't yet set triggered
             _state = BPRPullToRefreshStateTriggered;
@@ -130,7 +133,7 @@ NSString *NSStringFromBPRPullToRefreshState(BPRPullToRefreshState state) {
         }
     } else {
         //if we are already loading and the scrollview is resetting itself back to a static position
-        if (ABS(position.y) == _refreshView.thresholdHeight && !triggeredActionHandler) {
+        if (ABS(position.y) == scrollOffsetThreshold && !triggeredActionHandler) {
             if (_actionHandler) {
                 _actionHandler(self);
             }
@@ -138,7 +141,7 @@ NSString *NSStringFromBPRPullToRefreshState(BPRPullToRefreshState state) {
         }
     }
     
-    CGFloat progress = ABS(position.y)/_refreshView.thresholdHeight;
+    CGFloat progress = ABS(position.y - _originalTopOffset)/_refreshView.thresholdHeight;
     [_refreshView updateForProgress:progress withState:_state];
 }
 
@@ -151,7 +154,7 @@ NSString *NSStringFromBPRPullToRefreshState(BPRPullToRefreshState state) {
                                                           _originalContentInsets.bottom,
                                                           _originalContentInsets.right)];
     
-    [_scrollView setContentOffset:CGPointMake(0, _originalContentInsets.top) animated:YES];
+    [_scrollView setContentOffset:CGPointMake(0, _originalTopOffset) animated:YES];
 }
 
 - (void)animateScrollViewContentInsets:(UIEdgeInsets)edgeInsets {
